@@ -1,0 +1,3 @@
+Cython
+madmom # Install via "pip install git+https://github.com/CPJKU/madmom" (see https://github.com/CPJKU/madmom/issues/528)
+numpy
