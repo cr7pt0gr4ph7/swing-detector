@@ -1,3 +1,6 @@
-Cython
-madmom # Install via "pip install git+https://github.com/CPJKU/madmom" (see https://github.com/CPJKU/madmom/issues/528)
 numpy
+scipy
+cython
+mido
+madmom # Workaround: Install via "pip install git+https://github.com/CPJKU/madmom" (see https://github.com/CPJKU/madmom/issues/528)
+# ffmpeg # Enables support for additional audio formats besides WAV # Use "sudo apt-get update && sudo apt-get install ffmpeg" instead
