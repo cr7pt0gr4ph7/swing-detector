@@ -109,10 +109,10 @@ def analyze_file(
     onsets = librosa.onset.onset_detect(y=data, sr=rate, units='time')
 
     swing, stability, swing_values, count = compute_swing(beats, onsets)
+
+    # Compute histogram of swing values
     swing_histogram_counts, swing_histogram_edges = np.histogram(swing_values, 40, (0.4,0.8))
     swing_histogram = np.column_stack((swing_histogram_counts, swing_histogram_edges[0:-1]))
-
-    print(swing_histogram)
 
     return AudioFeatures(
         file=audio_file if isinstance(audio_file, str) else audio_file.name if hasattr(
@@ -126,37 +126,96 @@ def analyze_file(
         swing_histogram=swing_histogram.tolist() if raw_swing_histogram else None,
     )
 
+class OutputFormat:
+    def output(self, v: any):
+        pass
+
+    def error(self, e: Exception):
+        pass
+
+class QuietFormat(OutputFormat):
+    pass
+
+class JsonFormat(OutputFormat):
+    def output(self, v: any):
+        if hasattr(v, "to_json"):
+            print(
+                v.to_json(
+                    indent=2,
+                )
+            )
+        else:
+            print(
+                json.dumps(
+                    v,
+                    indent=2,
+                )
+            )
+
+    def error(self, e: Exception):
+        print(
+            json.dumps(
+                {"error": str(e)},
+                indent=2,
+            ),
+            file=sys.stderr,
+        )
+
+def get_output_format(format: str | None) -> OutputFormat:
+    if format == "json":
+        return JsonFormat()
+    elif format=="quiet":
+        return QuietFormat()
+    elif format is None:
+        return JsonFormat() # Default to JSON
+    else:
+        raise ValueError("Invalid output format: " + format)
 
 def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
+        "-o", "--offset",
+        help="Start analysis at this time within the audio file (in seconds).",
+        type=float,
+    )
+
+    parser.add_argument(
+        "-d", "--duration",
+        help="Only analyze up to this much audio (in seconds).",
+        type=float,
+    )
+
+    parser.add_argument(
+        "-f", "--format",
+        help="Output format",
+        type=str,
+        choices=["json", "quiet"],
+        default="json",
+    )
+
+    parser.add_argument(
         "audio_files",
         help="Audio file(s) to analyze",
-        nargs="*",
+        nargs="+",
     )
 
     args = parser.parse_args()
+    output_format = get_output_format(args.format)
+
     has_error = False
 
     for audio_file in args.audio_files:
         try:
-            result = analyze_file(audio_file)
-
-            print(
-                result.to_json(
-                    indent=2,
-                )
+            result = analyze_file(
+                audio_file,
+                offset=args.offset,
+                duration=args.duration,
             )
+            output_format.output(result)
 
         except Exception as e:
-            print(
-                json.dumps(
-                    {"error": str(e)},
-                    indent=2,
-                ),
-                file=sys.stderr,
-            )
+            output_format.error(e)
             has_error = True
 
     if has_error:
