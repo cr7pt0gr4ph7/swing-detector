@@ -95,7 +95,7 @@ class AudioFeatures:
     swing_intervals_used: float
 
 
-def analyze_file(audio_file: str, offset: float | None = None, duration: float | None = None):
+def analyze_file(audio_file, offset: float | None = None, duration: float | None = None):
     data, rate = librosa.load(audio_file, offset=offset, duration=duration)
     tempo, beats = librosa.beat.beat_track(y=data, sr=rate, units='time')
     onsets = librosa.onset.onset_detect(y=data, sr=rate, units='time')
@@ -103,7 +103,8 @@ def analyze_file(audio_file: str, offset: float | None = None, duration: float |
     swing, stability, count = compute_swing(beats, onsets)
 
     return AudioFeatures(
-        file=audio_file,
+        file=audio_file if isinstance(audio_file, str) else audio_file.name if hasattr(
+            audio_file, "name") else None,
         bpm=tempo,
         samplerate=rate,
         swing=round(swing, 4),
