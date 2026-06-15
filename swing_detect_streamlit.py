@@ -4,9 +4,14 @@ from swing_detect import analyze_file
 
 st.title("Swing Detector")
 
-st.text(
+st.markdown(
     """
-    Select one or more audio files to be analyzed. You can optionally restrict the analysis to only look at a certain section of the audio files.
+    Analyze how much a rhythm is [swung](https://en.wikipedia.org/wiki/Swing_time) in a given audio file by determining how the offbeats are positioned relative to the surrounding main beats.
+    This uses the [librosa](http://librosa.org/) library for estimating the positions of the main beats
+    as well as for detecting the intervening note onset events.
+
+    Select one or more audio files to be analyzed.
+    You can optionally restrict the analysis to only look at a certain section of the audio files.
     """
 )
 
