@@ -122,8 +122,8 @@ def analyze_file(
         swing=round(swing, 4),
         swing_stability=round(stability, 4),
         swing_intervals_used=count,
-        swing_values=swing_values if raw_swing_values else [],
-        swing_histogram=swing_histogram.tolist() if raw_swing_histogram else [],
+        swing_values=swing_values if raw_swing_values else None,
+        swing_histogram=swing_histogram.tolist() if raw_swing_histogram else None,
     )
 
 

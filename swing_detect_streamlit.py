@@ -6,9 +6,16 @@ st.title("Swing Detector")
 
 st.markdown(
     """
+    > Created by Lukas Waslowski ([@cr7pt0gr4ph7](https://github.com/cr7pt0gr4ph7)).
+    >
+    > Source code can be found on [GitHub](https://github.com/cr7pt0gr4ph7/swing-detector) under the GPL v3 license.
+
     Analyze how much a rhythm is [swung](https://en.wikipedia.org/wiki/Swing_time) in a given audio file by determining how the offbeats are positioned relative to the surrounding main beats.
     This uses the [librosa](http://librosa.org/) library for estimating the positions of the main beats
     as well as for detecting the intervening note onset events.
+
+    > A swing amount of `0.5` corresponds to an exactly straight rhythm,
+    > while `0.6666...` corresponds to a typical ⅔ + ⅓ swung rhythm.
 
     Select one or more audio files to be analyzed.
     You can optionally restrict the analysis to only look at a certain section of the audio files.
