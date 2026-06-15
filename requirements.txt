@@ -1,2 +1,4 @@
-numpy
+dataclasses-json
 librosa
+numpy
+streamlit

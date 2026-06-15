@@ -5,9 +5,13 @@ import json
 import statistics
 import sys
 
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+
 import numpy as np
 
 import librosa
+
 
 def compute_swing(beats, onsets):
     """
@@ -80,6 +84,17 @@ def compute_swing(beats, onsets):
     return swing, stability, len(swing_values)
 
 
+@dataclass_json
+@dataclass
+class AudioFeatures:
+    file: str
+    bpm: float
+    samplerate: float
+    swing: float
+    swing_stability: float
+    swing_intervals_used: float
+
+
 def analyze_file(audio_file: str, offset: float | None = None, duration: float | None = None):
     data, rate = librosa.load(audio_file, offset=offset, duration=duration)
     tempo, beats = librosa.beat.beat_track(y=data, sr=rate, units='time')
@@ -87,12 +102,14 @@ def analyze_file(audio_file: str, offset: float | None = None, duration: float |
 
     swing, stability, count = compute_swing(beats, onsets)
 
-    return {
-        "file": audio_file,
-        "swing": round(swing, 4),
-        "stability": round(stability, 4),
-        "intervals_used": count,
-    }
+    return AudioFeatures(
+        file=audio_file,
+        bpm=tempo,
+        samplerate=rate,
+        swing=round(swing, 4),
+        swing_stability=round(stability, 4),
+        swing_intervals_used=count,
+    )
 
 
 def main():
@@ -112,8 +129,7 @@ def main():
             result = analyze_file(audio_file)
 
             print(
-                json.dumps(
-                    result,
+                result.to_json(
                     indent=2,
                 )
             )
