@@ -7,10 +7,11 @@ import sys
 
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from mutagen.easyid3 import EasyID3
 
+import mutagen
 import numpy as np
 import numpy.typing as npt
-
 import librosa
 
 
@@ -111,8 +112,10 @@ def analyze_file(
     swing, stability, swing_values, count = compute_swing(beats, onsets)
 
     # Compute histogram of swing values
-    swing_histogram_counts, swing_histogram_edges = np.histogram(swing_values, 40, (0.4,0.8))
-    swing_histogram = np.column_stack((swing_histogram_counts, swing_histogram_edges[0:-1]))
+    swing_histogram_counts, swing_histogram_edges = np.histogram(
+        swing_values, 40, (0.4, 0.8))
+    swing_histogram = np.column_stack(
+        (swing_histogram_counts, swing_histogram_edges[0:-1]))
 
     return AudioFeatures(
         file=audio_file if isinstance(audio_file, str) else audio_file.name if hasattr(
@@ -126,6 +129,7 @@ def analyze_file(
         swing_histogram=swing_histogram.tolist() if raw_swing_histogram else None,
     )
 
+
 class OutputFormat:
     def output(self, v: any):
         pass
@@ -133,8 +137,10 @@ class OutputFormat:
     def error(self, e: Exception):
         pass
 
+
 class QuietFormat(OutputFormat):
     pass
+
 
 class JsonFormat(OutputFormat):
     def output(self, v: any):
@@ -155,21 +161,23 @@ class JsonFormat(OutputFormat):
     def error(self, e: Exception):
         print(
             json.dumps(
-                {"error": str(e)},
+                {"error": str(type(e)) + ": " + str(e)},
                 indent=2,
             ),
             file=sys.stderr,
         )
 
+
 def get_output_format(format: str | None) -> OutputFormat:
     if format == "json":
         return JsonFormat()
-    elif format=="quiet":
+    elif format == "quiet":
         return QuietFormat()
     elif format is None:
-        return JsonFormat() # Default to JSON
+        return JsonFormat()  # Default to JSON
     else:
         raise ValueError("Invalid output format: " + format)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -195,6 +203,33 @@ def main():
     )
 
     parser.add_argument(
+        "-w", "--write-tags",
+        help="Write the detected swing amount to the ID3 tags of the audio files.",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    parser.add_argument(
+        "--no-overwrite-tags",
+        dest="overwrite_tags",
+        help="Do not overwrite existing ID3 tags.",
+        action='store_false',
+    )
+
+    parser.add_argument(
+        "--swing-amount-tag",
+        help="Name of the metadata tag to write the detected swing amount to.",
+        type=str,
+        default="swing_amount",
+    )
+
+    parser.add_argument(
+        "--swing-stability-tag",
+        help="Name of the metadata tag to write the detected swing amount to.",
+        type=str,
+        # default="swing_stability",
+    )
+
+    parser.add_argument(
         "audio_files",
         help="Audio file(s) to analyze",
         nargs="+",
@@ -202,6 +237,12 @@ def main():
 
     args = parser.parse_args()
     output_format = get_output_format(args.format)
+
+    if args.swing_amount_tag:
+        EasyID3.RegisterTXXXKey(args.swing_amount_tag, args.swing_amount_tag)
+
+    if args.swing_stability_tag:
+        EasyID3.RegisterTXXXKey(args.swing_stability_tag, args.swing_stability_tag)
 
     has_error = False
 
@@ -213,6 +254,25 @@ def main():
                 duration=args.duration,
             )
             output_format.output(result)
+
+            # Write tags to audio-files
+            if args.write_tags:
+                metadata: mutagen.FileType = mutagen.File(
+                    audio_file, easy=True)
+
+                if metadata is None:
+                    raise NotImplementedError(
+                        "Failed to get metadata from audio file: " + audio_file)
+
+                if args.swing_amount_tag and (args.overwrite_tags or args.swing_amount_tag not in metadata.tags):
+                    metadata.tags[args.swing_amount_tag] = [str(result.swing)]
+
+                if args.swing_stability_tag and (args.overwrite_tags or args.swing_stability_tag not in metadata.tags):
+                    metadata.tags[args.swing_stability_tag] = [str(result.swing_stability)]
+
+                print(metadata.tags.pprint())
+
+                metadata.save()
 
         except Exception as e:
             output_format.error(e)
