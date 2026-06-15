@@ -7,48 +7,7 @@ import sys
 
 import numpy as np
 
-from madmom.features.beats import RNNBeatProcessor
-from madmom.features.beats import DBNBeatTrackingProcessor
-
-from madmom.features.onsets import RNNOnsetProcessor
-from madmom.features.onsets import OnsetPeakPickingProcessor
-
-
-def detect_beats(audio_file):
-    """
-    Return beat times in seconds.
-    """
-
-    beat_activation = RNNBeatProcessor()(audio_file)
-
-    beats = DBNBeatTrackingProcessor(
-        fps=100,
-        min_bpm=50,
-        max_bpm=220,
-    )(beat_activation)
-
-    return np.asarray(beats)
-
-
-def detect_onsets(audio_file):
-    """
-    Return onset times in seconds.
-    """
-
-    onset_activation = RNNOnsetProcessor()(audio_file)
-
-    onsets = OnsetPeakPickingProcessor(
-        fps=100,
-        threshold=0.5,
-        combine=0.03,
-        pre_avg=0.1,
-        post_avg=0.1,
-        pre_max=0.02,
-        post_max=0.02,
-    )(onset_activation)
-
-    return np.asarray(onsets)
-
+import librosa
 
 def compute_swing(beats, onsets):
     """
@@ -121,20 +80,12 @@ def compute_swing(beats, onsets):
     return swing, stability, len(swing_values)
 
 
-def analyze_file(audio_file):
-    beats = detect_beats(audio_file)
+def analyze_file(audio_file: str, offset: float | None = None, duration: float | None = None):
+    data, rate = librosa.load(audio_file, offset=offset, duration=duration)
+    tempo, beats = librosa.beat.beat_track(y=data, sr=rate, units='time')
+    onsets = librosa.onset.onset_detect(y=data, sr=rate, units='time')
 
-    if len(beats) < 8:
-        raise RuntimeError(
-            "Beat tracker found too few beats."
-        )
-
-    onsets = detect_onsets(audio_file)
-
-    swing, stability, count = compute_swing(
-        beats,
-        onsets,
-    )
+    swing, stability, count = compute_swing(beats, onsets)
 
     return {
         "file": audio_file,
@@ -148,30 +99,36 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "audio_file",
-        help="Audio file to analyze"
+        "audio_files",
+        help="Audio file(s) to analyze",
+        nargs="*",
     )
 
     args = parser.parse_args()
+    has_error = False
 
-    try:
-        result = analyze_file(args.audio_file)
+    for audio_file in args.audio_files:
+        try:
+            result = analyze_file(audio_file)
 
-        print(
-            json.dumps(
-                result,
-                indent=2,
+            print(
+                json.dumps(
+                    result,
+                    indent=2,
+                )
             )
-        )
 
-    except Exception as e:
-        print(
-            json.dumps(
-                {"error": str(e)},
-                indent=2,
-            ),
-            file=sys.stderr,
-        )
+        except Exception as e:
+            print(
+                json.dumps(
+                    {"error": str(e)},
+                    indent=2,
+                ),
+                file=sys.stderr,
+            )
+            has_error = True
+
+    if has_error:
         sys.exit(1)
 
 
