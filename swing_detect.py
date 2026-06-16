@@ -109,6 +109,8 @@ def detect_kick_snare(audio_file):
     snare_frames: list[float] = []
     frames: list[float] = []
     ratios: list[float] = []
+    low_energies: list[float] = []
+    high_energies: list[float] = []
 
     for frame in onset_frames:
         start = max(frame - 1, 0)
@@ -137,6 +139,8 @@ def detect_kick_snare(audio_file):
 
         frames.append(frame)
         ratios.append(ratio)
+        low_energies.append(low_energy)
+        high_energies.append(high_energy)
 
         if ratio > 1.0:
             kick_frames.append(frame)
@@ -152,7 +156,7 @@ def detect_kick_snare(audio_file):
     frame_times = librosa.frames_to_time(
         frames, sr=rate, hop_length=hop_length)
 
-    ratio_times = np.column_stack((frame_times, ratios)).tolist()
+    ratio_times = np.column_stack((frame_times, ratios, low_energies, high_energies)).tolist()
 
     return kick_times, snare_times, ratio_times
 
@@ -287,8 +291,9 @@ def write_onset_types(audio_file):
     kick_times, snare_times, ratio_times = detect_kick_snare(audio_file)
 
     with open(audio_file + ".onset_types.csv", "wt") as onset_types_file:
+        onset_types_file.write("Time,Ratio,Low Energy,High Energy\n")
         onset_types_file.writelines(
-            [str(time) + "," + str(ratio) + "\n" for (time, ratio) in ratio_times])
+            [str(time) + "," + str(ratio) + "," + str(low_energy) + "," + str(high_energy) + "\n" for (time, ratio, low_energy, high_energy) in ratio_times])
 
 
 def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
