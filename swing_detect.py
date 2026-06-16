@@ -141,11 +141,11 @@ def detect_kick_snare(audio_file):
     freqs: npt.NDArray[np.floating] = librosa.fft_frequencies(
         sr=rate, n_fft=n_fft)
 
-    kick_frames: list[float] = []
-    snare_frames: list[float] = []
     frames: list[float] = []
     ratios: list[float] = []
-    low_energies: list[float] = []
+    sub_energies: list[float] = []
+    low_mid_energies: list[float] = []
+    presence_energies: list[float] = []
     high_energies: list[float] = []
 
     for frame in onset_frames:
@@ -154,35 +154,30 @@ def detect_kick_snare(audio_file):
 
         # Sum up energies over low / high frequency bands
         normalize = True  # Whether to normalize for the size of the frequency bands
-        low_energy = sum_energies(
-            spectrum, freqs, 20, 150, normalize=normalize)
+        sub_energy = sum_energies(
+            spectrum, freqs, 20, 120, normalize=normalize)
+        low_mid_energy = sum_energies(
+            spectrum, freqs, 120, 500, normalize=normalize)
+        presence_energy = sum_energies(
+            spectrum, freqs, 1000, 4000, normalize=normalize)
         high_energy = sum_energies(
-            spectrum, freqs, 150, 4000, normalize=normalize)
-        ratio = low_energy / (high_energy + 1e-10)
+            spectrum, freqs, 5000, 12000, normalize=normalize)
 
         frames.append(frame)
-        ratios.append(ratio)
-        low_energies.append(low_energy)
+        ratios.append(1.0)
+        sub_energies.append(sub_energy)
+        low_mid_energies.append(low_mid_energy)
+        presence_energies.append(presence_energy)
         high_energies.append(high_energy)
-
-        if ratio > 1.0:
-            kick_frames.append(frame)
-        else:
-            snare_frames.append(frame)
-
-    kick_times = librosa.frames_to_time(
-        kick_frames, sr=rate, hop_length=hop_length)
-
-    snare_times = librosa.frames_to_time(
-        snare_frames, sr=rate, hop_length=hop_length)
 
     frame_times = librosa.frames_to_time(
         frames, sr=rate, hop_length=hop_length)
 
     ratio_times = np.column_stack(
-        (frame_times, ratios, low_energies, high_energies)).tolist()
+        (frame_times, ratios, sub_energies,
+         low_mid_energies, presence_energies, high_energies)).tolist()
 
-    return kick_times, snare_times, ratio_times
+    return ratio_times
 
 
 @dataclass_json
@@ -312,12 +307,13 @@ def write_onset_strengths(audio_file):
 
 
 def write_onset_types(audio_file):
-    kick_times, snare_times, ratio_times = detect_kick_snare(audio_file)
+    ratio_times = detect_kick_snare(audio_file)
 
     with open(audio_file + ".onset_types.csv", "wt") as onset_types_file:
-        onset_types_file.write("Time,Ratio,Low Energy,High Energy\n")
+        onset_types_file.write(
+            "Time,Ratio,Sub Energy,Low-Mid Energy,Presence Energy,High Energy\n")
         onset_types_file.writelines(
-            [str(time) + "," + str(ratio) + "," + str(low_energy) + "," + str(high_energy) + "\n" for (time, ratio, low_energy, high_energy) in ratio_times])
+            [",".join([str(field) for field in data]) + "\n" for data in ratio_times])
 
 
 def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
@@ -431,17 +427,17 @@ def main():
                                 args.swing_stability_tag)
 
     for audio_file in args.audio_files:
-        try:
-            if args.write_onsets:
-                cmd_write_onsets_for_audio_file(
-                    audio_file, output_format, args)
-            else:
-                cmd_analyze_audio_file(
-                    audio_file, output_format, args)
+        # try:
+        if args.write_onsets:
+            cmd_write_onsets_for_audio_file(
+                audio_file, output_format, args)
+        else:
+            cmd_analyze_audio_file(
+                audio_file, output_format, args)
 
-        except Exception as e:
-            output_format.error(e)
-            has_error = True
+        # except Exception as e:
+        #     output_format.error(e)
+        #     has_error = True
 
     if has_error:
         sys.exit(1)
