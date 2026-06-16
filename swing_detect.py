@@ -193,14 +193,23 @@ def write_onsets(audio_file, units: Literal['frames', 'samples', 'time']):
         onsets_file.writelines([str(time) + "\n" for time in onsets])
 
 
+def write_onset_strengths(audio_file):
+    data, rate = librosa.load(audio_file)
+    onset_strengths = librosa.onset.onset_strength(y=data, sr=rate)
+
+    with open(audio_file + ".onset_strengths.csv", "wt") as onset_strengths_file:
+        onset_strengths_file.writelines([str(strength) + "\n" for strength in onset_strengths])
+
+
 def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
+    write_onset_strengths(audio_file)
     write_onsets(audio_file, 'time')
     write_onsets(audio_file, 'frames')
     write_onsets(audio_file, 'samples')
 
 
 def cmd_analyze_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
-    result= analyze_file(
+    result = analyze_file(
         audio_file,
         offset=args.offset,
         duration=args.duration,
