@@ -86,6 +86,77 @@ def compute_swing(
     return swing, stability, swing_values, len(swing_values)
 
 
+def detect_kick_snare(audio_file):
+    data, rate = librosa.load(audio_file, sr=None, mono=True)
+
+    # Hop length (in samples)
+    hop_length = 512
+
+    # Length of windowed FFT signal after padding
+    n_fft = 2048
+
+    onset_frames = librosa.onset.onset_detect(
+        y=data,
+        sr=rate,
+        units='frames',
+        hop_length=hop_length,
+        backtrack=True,
+    )
+    S = np.abs(librosa.stft(data, n_fft=n_fft, hop_length=hop_length))
+    freqs = librosa.fft_frequencies(sr=rate, n_fft=n_fft)
+
+    kick_frames: list[float] = []
+    snare_frames: list[float] = []
+    frames: list[float] = []
+    ratios: list[float] = []
+
+    for frame in onset_frames:
+        start = max(frame - 1, 0)
+        end = min(frame + 2, S.shape[1])
+
+        spectrum = np.mean(
+            S[:, start:end],
+            axis=1
+        )
+
+        low_energy = np.sum(
+            spectrum[
+                (freqs >= 20) &
+                (freqs <= 150)
+            ]
+        )
+
+        high_energy = np.sum(
+            spectrum[
+                (freqs > 150) &
+                (freqs <= 4000)
+            ]
+        )
+
+        ratio = low_energy / (high_energy + 1e-10)
+
+        frames.append(frame)
+        ratios.append(ratio)
+
+        if ratio > 1.0:
+            kick_frames.append(frame)
+        else:
+            snare_frames.append(frame)
+
+    kick_times = librosa.frames_to_time(
+        kick_frames, sr=rate, hop_length=hop_length)
+
+    snare_times = librosa.frames_to_time(
+        snare_frames, sr=rate, hop_length=hop_length)
+
+    frame_times = librosa.frames_to_time(
+        frames, sr=rate, hop_length=hop_length)
+
+    ratio_times = np.column_stack((frame_times, ratios)).tolist()
+
+    return kick_times, snare_times, ratio_times
+
+
 @dataclass_json
 @dataclass
 class AudioFeatures:
@@ -106,7 +177,17 @@ def analyze_file(
     raw_swing_values: bool = False,
     raw_swing_histogram: bool = False,
 ):
-    data, rate = librosa.load(audio_file, offset=offset, duration=duration)
+    data, rate = librosa.load(
+        audio_file,
+
+        # Use native sample rate of audio file
+        sr=None,
+
+        # Start + Duration of segment to analyze
+        offset=offset,
+        duration=duration,
+    )
+
     tempo, beats = librosa.beat.beat_track(y=data, sr=rate, units='time')
     onsets = librosa.onset.onset_detect(y=data, sr=rate, units='time')
 
@@ -181,7 +262,7 @@ def get_output_format(format: str | None) -> OutputFormat:
 
 
 def write_onsets(audio_file, units: Literal['frames', 'samples', 'time']):
-    data, rate = librosa.load(audio_file)
+    data, rate = librosa.load(audio_file, sr=None)
     tempo, beats = librosa.beat.beat_track(y=data, sr=rate, units=units)
     onsets = librosa.onset.onset_detect(y=data, sr=rate, units=units)
 
@@ -198,11 +279,21 @@ def write_onset_strengths(audio_file):
     onset_strengths = librosa.onset.onset_strength(y=data, sr=rate)
 
     with open(audio_file + ".onset_strengths.csv", "wt") as onset_strengths_file:
-        onset_strengths_file.writelines([str(strength) + "\n" for strength in onset_strengths])
+        onset_strengths_file.writelines(
+            [str(strength) + "\n" for strength in onset_strengths])
+
+
+def write_onset_types(audio_file):
+    kick_times, snare_times, ratio_times = detect_kick_snare(audio_file)
+
+    with open(audio_file + ".onset_types.csv", "wt") as onset_types_file:
+        onset_types_file.writelines(
+            [str(time) + "," + str(ratio) + "\n" for (time, ratio) in ratio_times])
 
 
 def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
     write_onset_strengths(audio_file)
+    write_onset_types(audio_file)
     write_onsets(audio_file, 'time')
     write_onsets(audio_file, 'frames')
     write_onsets(audio_file, 'samples')
