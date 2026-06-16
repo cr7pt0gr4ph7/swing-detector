@@ -157,7 +157,7 @@ def detect_kick_snare(audio_file):
         low_energy = sum_energies(
             spectrum, freqs, 20, 150, normalize=normalize)
         high_energy = sum_energies(
-            spectrum, freqs, 150, 400, normalize=normalize)
+            spectrum, freqs, 150, 4000, normalize=normalize)
         ratio = low_energy / (high_energy + 1e-10)
 
         frames.append(frame)
