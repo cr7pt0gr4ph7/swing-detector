@@ -4,6 +4,12 @@
 *.ogg
 *.wav
 
+# CSV files emitted by our tools
+*.csv
+
+# Sound Visualiser project files
+*.sv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
