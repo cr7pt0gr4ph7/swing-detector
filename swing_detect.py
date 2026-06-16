@@ -6,6 +6,7 @@ import statistics
 import sys
 
 from dataclasses import dataclass
+from typing import Literal
 from dataclasses_json import dataclass_json
 from mutagen.easyid3 import EasyID3
 
@@ -127,7 +128,7 @@ def analyze_file(
         swing_intervals_used=count,
         swing_values=swing_values if raw_swing_values else None,
         swing_histogram=swing_histogram.tolist() if raw_swing_histogram else None,
-    )
+    ), beats, onsets
 
 
 class OutputFormat:
@@ -177,6 +178,54 @@ def get_output_format(format: str | None) -> OutputFormat:
         return JsonFormat()  # Default to JSON
     else:
         raise ValueError("Invalid output format: " + format)
+
+
+def write_onsets(audio_file, units: Literal['frames', 'samples', 'time']):
+    data, rate = librosa.load(audio_file)
+    tempo, beats = librosa.beat.beat_track(y=data, sr=rate, units=units)
+    onsets = librosa.onset.onset_detect(y=data, sr=rate, units=units)
+
+    # Write event times to CSV files
+    with open(audio_file + ".beats_" + units + ".csv", "wt") as beats_file:
+        beats_file.writelines([str(time) + "\n" for time in beats])
+
+    with open(audio_file + ".onsets_" + units + ".csv", "wt") as onsets_file:
+        onsets_file.writelines([str(time) + "\n" for time in onsets])
+
+
+def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
+    write_onsets(audio_file, 'time')
+    write_onsets(audio_file, 'frames')
+    write_onsets(audio_file, 'samples')
+
+
+def cmd_analyze_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
+    result, beats, onsets = analyze_file(
+        audio_file,
+        offset=args.offset,
+        duration=args.duration,
+    )
+    output_format.output(result)
+
+    # Write tags to audio files
+    if args.write_tags:
+        metadata: mutagen.FileType = mutagen.File(
+            audio_file, easy=True)
+
+        if metadata is None:
+            raise NotImplementedError(
+                "Failed to get metadata from audio file: " + audio_file)
+
+        if args.swing_amount_tag and (args.overwrite_tags or args.swing_amount_tag not in metadata.tags):
+            metadata.tags[args.swing_amount_tag] = [str(result.swing)]
+
+        if args.swing_stability_tag and (args.overwrite_tags or args.swing_stability_tag not in metadata.tags):
+            metadata.tags[args.swing_stability_tag] = [
+                str(result.swing_stability)]
+
+        print(metadata.tags.pprint())
+
+        metadata.save()
 
 
 def main():
@@ -230,6 +279,12 @@ def main():
     )
 
     parser.add_argument(
+        "--write-onsets",
+        help="Write CSV files with the beats, note onsets etc.",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    parser.add_argument(
         "audio_files",
         help="Audio file(s) to analyze",
         nargs="+",
@@ -237,42 +292,22 @@ def main():
 
     args = parser.parse_args()
     output_format = get_output_format(args.format)
+    has_error = False
 
     if args.swing_amount_tag:
         EasyID3.RegisterTXXXKey(args.swing_amount_tag, args.swing_amount_tag)
 
     if args.swing_stability_tag:
-        EasyID3.RegisterTXXXKey(args.swing_stability_tag, args.swing_stability_tag)
-
-    has_error = False
+        EasyID3.RegisterTXXXKey(args.swing_stability_tag,
+                                args.swing_stability_tag)
 
     for audio_file in args.audio_files:
         try:
-            result = analyze_file(
-                audio_file,
-                offset=args.offset,
-                duration=args.duration,
-            )
-            output_format.output(result)
-
-            # Write tags to audio-files
-            if args.write_tags:
-                metadata: mutagen.FileType = mutagen.File(
-                    audio_file, easy=True)
-
-                if metadata is None:
-                    raise NotImplementedError(
-                        "Failed to get metadata from audio file: " + audio_file)
-
-                if args.swing_amount_tag and (args.overwrite_tags or args.swing_amount_tag not in metadata.tags):
-                    metadata.tags[args.swing_amount_tag] = [str(result.swing)]
-
-                if args.swing_stability_tag and (args.overwrite_tags or args.swing_stability_tag not in metadata.tags):
-                    metadata.tags[args.swing_stability_tag] = [str(result.swing_stability)]
-
-                print(metadata.tags.pprint())
-
-                metadata.save()
+            if args.write_onsets:
+                cmd_write_onsets_for_audio_file(
+                    audio_file, output_format, args)
+            else:
+                cmd_analyze_audio_file(audio_file, output_format, args)
 
         except Exception as e:
             output_format.error(e)
