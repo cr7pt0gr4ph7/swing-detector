@@ -86,6 +86,40 @@ def compute_swing(
     return swing, stability, swing_values, len(swing_values)
 
 
+def sum_energies(
+    spectrum: npt.NDArray[np.floating],
+    freqs: npt.NDArray[np.floating],
+    low_freq: float,
+    high_freq: float,
+    normalize: bool = False,
+):
+    # Calculate the total energy of the given frequency band
+    energy = np.sum(
+        spectrum[
+            (freqs >= low_freq) &
+            (freqs < high_freq)
+        ]
+    )
+
+    # Normalize for the band size
+    normalized_energy = energy / (high_freq - low_freq)
+
+    if normalize:
+        return normalized_energy
+    else:
+        return energy
+
+
+def sliding_mean_spectrum(
+    raw_spectrum: npt.NDArray[np.floating],
+    frame: int,
+    window_size: int,
+):
+    start = max(frame - window_size, 0)
+    end = min(frame + 1 + window_size, raw_spectrum.shape[1])
+    return np.mean(raw_spectrum[:, start:end], axis=1)
+
+
 def detect_kick_snare(audio_file):
     data, rate = librosa.load(audio_file, sr=None, mono=True)
 
@@ -102,8 +136,10 @@ def detect_kick_snare(audio_file):
         hop_length=hop_length,
         backtrack=True,
     )
-    S = np.abs(librosa.stft(data, n_fft=n_fft, hop_length=hop_length))
-    freqs = librosa.fft_frequencies(sr=rate, n_fft=n_fft)
+    raw_spectrum: npt.NDArray[np.complexfloating] = np.abs(
+        librosa.stft(data, n_fft=n_fft, hop_length=hop_length))
+    freqs: npt.NDArray[np.floating] = librosa.fft_frequencies(
+        sr=rate, n_fft=n_fft)
 
     kick_frames: list[float] = []
     snare_frames: list[float] = []
@@ -113,28 +149,15 @@ def detect_kick_snare(audio_file):
     high_energies: list[float] = []
 
     for frame in onset_frames:
-        start = max(frame - 1, 0)
-        end = min(frame + 2, S.shape[1])
+        # Compute sliding mean over 3 frames
+        spectrum = sliding_mean_spectrum(raw_spectrum, frame, 1)
 
-        spectrum = np.mean(
-            S[:, start:end],
-            axis=1
-        )
-
-        low_energy = np.sum(
-            spectrum[
-                (freqs >= 20) &
-                (freqs <= 150)
-            ]
-        )
-
-        high_energy = np.sum(
-            spectrum[
-                (freqs > 150) &
-                (freqs <= 4000)
-            ]
-        )
-
+        # Sum up energies over low / high frequency bands
+        normalize = True  # Whether to normalize for the size of the frequency bands
+        low_energy = sum_energies(
+            spectrum, freqs, 20, 150, normalize=normalize)
+        high_energy = sum_energies(
+            spectrum, freqs, 150, 400, normalize=normalize)
         ratio = low_energy / (high_energy + 1e-10)
 
         frames.append(frame)
@@ -156,7 +179,8 @@ def detect_kick_snare(audio_file):
     frame_times = librosa.frames_to_time(
         frames, sr=rate, hop_length=hop_length)
 
-    ratio_times = np.column_stack((frame_times, ratios, low_energies, high_energies)).tolist()
+    ratio_times = np.column_stack(
+        (frame_times, ratios, low_energies, high_energies)).tolist()
 
     return kick_times, snare_times, ratio_times
 
@@ -297,11 +321,11 @@ def write_onset_types(audio_file):
 
 
 def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
-    write_onset_strengths(audio_file)
     write_onset_types(audio_file)
-    write_onsets(audio_file, 'time')
-    write_onsets(audio_file, 'frames')
-    write_onsets(audio_file, 'samples')
+    # write_onset_strengths(audio_file)
+    # write_onsets(audio_file, 'time')
+    # write_onsets(audio_file, 'frames')
+    # write_onsets(audio_file, 'samples')
 
 
 def cmd_analyze_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
