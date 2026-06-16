@@ -128,7 +128,7 @@ def analyze_file(
         swing_intervals_used=count,
         swing_values=swing_values if raw_swing_values else None,
         swing_histogram=swing_histogram.tolist() if raw_swing_histogram else None,
-    ), beats, onsets
+    )
 
 
 class OutputFormat:
@@ -200,7 +200,7 @@ def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, arg
 
 
 def cmd_analyze_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
-    result, beats, onsets = analyze_file(
+    result= analyze_file(
         audio_file,
         offset=args.offset,
         duration=args.duration,
@@ -307,7 +307,8 @@ def main():
                 cmd_write_onsets_for_audio_file(
                     audio_file, output_format, args)
             else:
-                cmd_analyze_audio_file(audio_file, output_format, args)
+                cmd_analyze_audio_file(
+                    audio_file, output_format, args)
 
         except Exception as e:
             output_format.error(e)
