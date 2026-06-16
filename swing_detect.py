@@ -153,7 +153,7 @@ def detect_kick_snare(audio_file):
         spectrum = sliding_mean_spectrum(raw_spectrum, frame, 1)
 
         # Sum up energies over low / high frequency bands
-        normalize = True  # Whether to normalize for the size of the frequency bands
+        normalize = False  # Whether to normalize for the size of the frequency bands
         sub_energy = sum_energies(
             spectrum, freqs, 20, 120, normalize=normalize)
         low_mid_energy = sum_energies(
