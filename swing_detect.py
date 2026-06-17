@@ -316,8 +316,27 @@ def write_onset_types(audio_file):
         onset_types_file.writelines(
             [",".join([str(field) for field in data]) + "\n" for data in ratio_times])
 
+def write_spectral_flatness(audio_file):
+    # Hop length (in samples)
+    hop_length = 512
+
+    # Length of windowed FFT signal after padding
+    n_fft = 2048
+
+    data, rate = librosa.load(audio_file, sr=None)
+    spectral_flatness = librosa.feature.spectral_flatness(
+        y=data,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        center=False,
+    )
+
+    with open(audio_file + ".spectral_flatness.csv", "wt") as f:
+        f.writelines([str(value) + "\n" for value in spectral_flatness[0]])
+
 
 def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
+    write_spectral_flatness(audio_file)
     write_onset_strengths(audio_file)
     write_onset_types(audio_file)
     write_onsets(audio_file, 'time')
