@@ -113,10 +113,11 @@ def sum_energies(
 def sliding_mean_spectrum(
     raw_spectrum: npt.NDArray[np.floating],
     frame: int,
-    window_size: int,
+    pre: int = 0,
+    post: int = 0,
 ):
-    start = max(frame - window_size, 0)
-    end = min(frame + 1 + window_size, raw_spectrum.shape[1])
+    start = max(frame - pre, 0)
+    end = min(frame + 1 + post, raw_spectrum.shape[1])
     return np.mean(raw_spectrum[:, start:end], axis=1)
 
 
@@ -149,8 +150,8 @@ def detect_kick_snare(audio_file):
     high_energies: list[float] = []
 
     for frame in onset_frames:
-        # Compute sliding mean over 3 frames
-        spectrum = sliding_mean_spectrum(raw_spectrum, frame, 1)
+        # Compute sliding mean over 4 frames
+        spectrum = sliding_mean_spectrum(raw_spectrum, frame, pre=1, post=3)
 
         # Sum up energies over low / high frequency bands
         normalize = False  # Whether to normalize for the size of the frequency bands
@@ -164,7 +165,7 @@ def detect_kick_snare(audio_file):
             spectrum, freqs, 5000, 12000, normalize=normalize)
 
         frames.append(frame)
-        ratios.append(1.0)
+        ratios.append(low_mid_energy / (presence_energy + 1e-10))
         sub_energies.append(sub_energy)
         low_mid_energies.append(low_mid_energy)
         presence_energies.append(presence_energy)
