@@ -316,6 +316,7 @@ def write_onset_types(audio_file):
         onset_types_file.writelines(
             [",".join([str(field) for field in data]) + "\n" for data in ratio_times])
 
+
 def write_spectral_flatness(audio_file):
     # Hop length (in samples)
     hop_length = 512
