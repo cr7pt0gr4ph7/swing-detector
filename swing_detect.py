@@ -317,11 +317,11 @@ def write_onset_types(audio_file):
 
 
 def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
+    write_onset_strengths(audio_file)
     write_onset_types(audio_file)
-    # write_onset_strengths(audio_file)
-    # write_onsets(audio_file, 'time')
-    # write_onsets(audio_file, 'frames')
-    # write_onsets(audio_file, 'samples')
+    write_onsets(audio_file, 'time')
+    write_onsets(audio_file, 'frames')
+    write_onsets(audio_file, 'samples')
 
 
 def cmd_analyze_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
@@ -427,17 +427,17 @@ def main():
                                 args.swing_stability_tag)
 
     for audio_file in args.audio_files:
-        # try:
-        if args.write_onsets:
-            cmd_write_onsets_for_audio_file(
-                audio_file, output_format, args)
-        else:
-            cmd_analyze_audio_file(
-                audio_file, output_format, args)
+        try:
+            if args.write_onsets:
+                cmd_write_onsets_for_audio_file(
+                    audio_file, output_format, args)
+            else:
+                cmd_analyze_audio_file(
+                    audio_file, output_format, args)
 
-        # except Exception as e:
-        #     output_format.error(e)
-        #     has_error = True
+        except Exception as e:
+            output_format.error(e)
+            has_error = True
 
     if has_error:
         sys.exit(1)
