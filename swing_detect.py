@@ -285,10 +285,13 @@ def get_output_format(format: str | None) -> OutputFormat:
         raise ValueError("Invalid output format: " + format)
 
 
-def write_onsets(audio_file, units: Literal['frames', 'samples', 'time']):
+def write_onsets(audio_file, units: Literal['frames', 'samples', 'time'] = 'time'):
     data, rate = librosa.load(audio_file, sr=None)
     tempo, beats = librosa.beat.beat_track(y=data, sr=rate, units=units)
-    onsets = librosa.onset.onset_detect(y=data, sr=rate, units=units)
+    onset_envelope = librosa.onset.onset_strength(y=data, sr=rate)
+    onsets = librosa.onset.onset_detect(
+        y=data, sr=rate, units=units, onset_envelope=onset_envelope)
+    onsets_backtracked = librosa.onset.onset_backtrack(onsets, onset_envelope)
 
     # Write event times to CSV files
     with open(audio_file + ".beats_" + units + ".csv", "wt") as beats_file:
@@ -297,14 +300,13 @@ def write_onsets(audio_file, units: Literal['frames', 'samples', 'time']):
     with open(audio_file + ".onsets_" + units + ".csv", "wt") as onsets_file:
         onsets_file.writelines([str(time) + "\n" for time in onsets])
 
-
-def write_onset_strengths(audio_file):
-    data, rate = librosa.load(audio_file)
-    onset_strengths = librosa.onset.onset_strength(y=data, sr=rate)
+    with open(audio_file + ".onsets_backtrack_" + units + ".csv", "wt") as onsets_backtracked_file:
+        onsets_backtracked_file.writelines(
+            [str(time) + "\n" for time in onsets_backtracked])
 
     with open(audio_file + ".onset_strengths.csv", "wt") as onset_strengths_file:
         onset_strengths_file.writelines(
-            [str(strength) + "\n" for strength in onset_strengths])
+            [str(strength) + "\n" for strength in onset_envelope])
 
 
 def write_onset_types(audio_file):
@@ -338,11 +340,8 @@ def write_spectral_flatness(audio_file):
 
 def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
     write_spectral_flatness(audio_file)
-    write_onset_strengths(audio_file)
     write_onset_types(audio_file)
     write_onsets(audio_file, 'time')
-    write_onsets(audio_file, 'frames')
-    write_onsets(audio_file, 'samples')
 
 
 def cmd_analyze_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
