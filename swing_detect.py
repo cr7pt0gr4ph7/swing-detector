@@ -430,6 +430,12 @@ def main():
     )
 
     parser.add_argument(
+        "--stacktrace",
+        help="Do not catch exceptions.",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    parser.add_argument(
         "audio_files",
         help="Audio file(s) to analyze",
         nargs="+",
@@ -447,7 +453,7 @@ def main():
                                 args.swing_stability_tag)
 
     for audio_file in args.audio_files:
-        try:
+        def run_command():
             if args.write_onsets:
                 cmd_write_onsets_for_audio_file(
                     audio_file, output_format, args)
@@ -455,9 +461,14 @@ def main():
                 cmd_analyze_audio_file(
                     audio_file, output_format, args)
 
-        except Exception as e:
-            output_format.error(e)
-            has_error = True
+        if args.stacktrace:
+            run_command()
+        else:
+            try:
+                run_command()
+            except Exception as e:
+                output_format.error(e)
+                has_error = True
 
     if has_error:
         sys.exit(1)
