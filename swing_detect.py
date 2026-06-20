@@ -352,6 +352,33 @@ def cmd_write_onsets_for_audio_file(audio_file, output_format: OutputFormat, arg
     write_onset_types(audio_file)
     write_onsets(audio_file, 'time')
 
+def cmd_write_spectogram_for_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
+    # Hop length (in samples)
+    hop_length = 512
+
+    # Length of windowed FFT signal after padding
+    n_fft = 2048
+
+    data, rate = librosa.load(audio_file, sr=None, duration=10)
+    S = librosa.stft(
+        y=data,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        center=False,
+    )
+
+    S_t = S.transpose()
+    magnitudes = np.abs(S_t)
+    db_magnitudes = librosa.power_to_db(magnitudes)
+    phases = np.angle(S_t)
+
+    with open(audio_file + ".spectogram.db_magnitudes.csv", "wt") as csv_file:
+        csv_file.writelines(
+            [",".join([str(field) for field in data]) + "\n" for data in db_magnitudes])
+
+    with open(audio_file + ".spectogram.phases.csv", "wt") as csv_file:
+        csv_file.writelines(
+            [",".join([str(field) for field in data]) + "\n" for data in phases])
 
 def cmd_analyze_audio_file(audio_file, output_format: OutputFormat, args: argparse.Namespace):
     result = analyze_file(
@@ -439,6 +466,12 @@ def main():
     )
 
     parser.add_argument(
+        "--write-spectogram",
+        help="Write CSV files with the spectogram.",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    parser.add_argument(
         "--stacktrace",
         help="Do not catch exceptions.",
         action=argparse.BooleanOptionalAction,
@@ -466,7 +499,12 @@ def main():
             if args.write_onsets:
                 cmd_write_onsets_for_audio_file(
                     audio_file, output_format, args)
-            else:
+
+            if args.write_spectogram:
+                cmd_write_spectogram_for_audio_file(
+                    audio_file, output_format, args)
+
+            if not args.write_onsets and not args.write_spectogram:
                 cmd_analyze_audio_file(
                     audio_file, output_format, args)
 
