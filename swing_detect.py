@@ -15,6 +15,8 @@ import numpy as np
 import numpy.typing as npt
 import librosa
 
+from onset_detection import ComplexSpectralDifferenceODF
+
 
 def compute_swing(
     beats: npt.NDArray[np.float32],
@@ -291,7 +293,11 @@ def write_onsets(audio_file, units: Literal['frames', 'samples', 'time'] = 'time
     onset_envelope = librosa.onset.onset_strength(y=data, sr=rate)
     onsets = librosa.onset.onset_detect(
         y=data, sr=rate, units=units, onset_envelope=onset_envelope)
-    onsets_backtracked = librosa.onset.onset_backtrack(onsets, onset_envelope)
+    # onsets_backtracked = librosa.onset.onset_backtrack(onsets, onset_envelope)
+    onsets_backtracked = librosa.onset.onset_detect(
+        y=data, sr=rate, units=units, onset_envelope=onset_envelope, backtrack=True)
+
+    complex_odf = ComplexSpectralDifferenceODF(sensitivity=50, adaptive_whitening=False).run(data, rate, None, None)
 
     # Write event times to CSV files
     with open(audio_file + ".beats_" + units + ".csv", "wt") as beats_file:
@@ -302,12 +308,15 @@ def write_onsets(audio_file, units: Literal['frames', 'samples', 'time'] = 'time
 
     with open(audio_file + ".onsets_backtrack_" + units + ".csv", "wt") as onsets_backtracked_file:
         onsets_backtracked_file.writelines(
-            [str(time) + "\n" for time in onsets_backtracked])
+            [str(value) + "\n" for value in onsets_backtracked])
 
     with open(audio_file + ".onset_strengths.csv", "wt") as onset_strengths_file:
         onset_strengths_file.writelines(
             [str(strength) + "\n" for strength in onset_envelope])
 
+    with open(audio_file + ".complex_odf.csv", "wt") as complex_odf_file:
+        complex_odf_file.writelines(
+            [str(value) + "\n" for value in complex_odf])
 
 def write_onset_types(audio_file):
     ratio_times = detect_kick_snare(audio_file)

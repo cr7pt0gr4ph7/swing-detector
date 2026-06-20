@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+from typing import Optional
+
+import librosa
 import numpy as np
 import numpy.typing as npt
 
@@ -10,20 +13,65 @@ def princarg(angle: npt.ArrayLike | float) -> npt.ArrayLike | float:
 
 class OnsetDetectionFunction:
     # Runtime data / state
-    data_length: int
+    frame_length: int
     half_length: int
     step_size: int
     dtype: npt.DTypeLike
 
-    def prepare(
+    def run(
         self,
-        frame_length: int,
+        y: npt.NDArray[np.floating],
+        sr: Optional[float] = None,
+        block_size: int = None,  # corresponds to n_fft in librosa?
+        step_size: int = None,  # corresponds to hop_length in librosa
+    ):
+        if step_size is None:
+            if sr is None:
+                raise ValueError(
+                    "At least one of sr and step_size must be specified")
+
+            preferred_step_seconds = 0.01161
+            preferred_step_size = max(
+                1, int(sr * preferred_step_seconds + 0.0001))
+            step_size = preferred_step_size
+
+        if block_size is None:
+            preferred_step_size = step_size
+            preferred_block_size = 2 * preferred_step_size
+            block_size = preferred_block_size
+
+        S = librosa.stft(y=y, n_fft=block_size, hop_length=step_size)
+
+        return self.run_on_spectogram(S, block_size, step_size, y.dtype)
+
+    def run_on_spectogram(
+        self,
+        spectogram: npt.NDArray[np.complexfloating],
+        block_size: int,
         step_size: int,
         dtype: npt.DTypeLike,
     ):
-        self.data_length = frame_length
-        self.half_length = self.data_length/2 + 1
-        self.step_size = step_size
+        self.prepare(block_size, step_size, dtype)
+
+        spectogram_t = np.transpose(spectogram)
+        result = np.ndarray((spectogram_t.shape[0],), self.dtype)
+
+        for i in range(0, spectogram_t.shape[0]):
+            # represents block_size samples, picked at every step_size
+            spectrum = spectogram_t[i]
+            result[i] = self.process_frame(spectrum)
+
+        return result
+
+    def prepare(
+        self,
+        block_size: int,
+        step_size: int,
+        dtype: npt.DTypeLike,
+    ):
+        self.frame_length = int(block_size)
+        self.half_length = int(self.frame_length/2 + 1)
+        self.step_size = int(step_size)
         self.dtype = dtype
         self.init()
 
@@ -36,7 +84,7 @@ class OnsetDetectionFunction:
 
 class HighFrequencyContentODF(OnsetDetectionFunction):
     def process_frame(self, spectrum: npt.NDArray[np.complexfloating]):
-        magnitudes: npt.NDArray[np.float    ing] = np.abs(spectrum)
+        magnitudes: npt.NDArray[np.floating] = np.abs(spectrum)
 
         return np.sum(
             np.multiply(
@@ -126,8 +174,14 @@ class ComplexSpectralDifferenceODF(OnsetDetectionFunction):
     phase_history: npt.NDArray[np.floating]
     magnitude_history: npt.NDArray[np.floating]
 
-    def __init__(self, db_rise: float, adaptive_whitening: bool, whitening_relax_coeff: float, whitening_floor: float):
-        self.db_rise = db_rise
+    def __init__(
+        self,
+        sensitivity: float,
+        adaptive_whitening: bool,
+        whitening_relax_coeff: float = -1,
+        whitening_floor: float = -1,
+    ):
+        self.db_rise = 6.0 - sensitivity / 16.6667
         self.whiten = adaptive_whitening
         self.whiten_relax_coeff = whitening_relax_coeff
         self.whiten_floor = whitening_floor
